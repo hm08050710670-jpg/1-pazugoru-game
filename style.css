@@ -596,3 +596,40 @@ html,body{margin:0!important;padding:0!important;width:100%!important;max-width:
   25%{opacity:1}
   100%{opacity:0;transform:translateX(75%) rotate(18deg)}
 }
+
+/* START v3 — stage-button style.
+   The baked START is the outer base; this real button is the smaller inner press surface. */
+.premium-start .start-art-wrap .real-start-button{
+  left:20.5%!important;
+  right:20.5%!important;
+  top:73.0%!important;
+  height:7.15%!important;
+  min-height:0!important;
+  gap:2vw!important;
+  border:2.5px solid rgba(226,255,238,.96)!important;
+  border-radius:999px!important;
+  background:linear-gradient(180deg,#12ad5b 0%,#078e47 54%,#00723a 100%)!important;
+  color:#fff!important;
+  font:1000 clamp(25px,6.6vw,39px)/1 system-ui,-apple-system,sans-serif!important;
+  text-shadow:0 2px 2px rgba(0,0,0,.48)!important;
+  box-shadow:
+    0 .48vw 0 #00512c,
+    0 .72vw 1.45vw rgba(0,0,0,.28),
+    inset 0 2px 0 rgba(255,255,255,.30)!important;
+  transition:transform .055s ease,filter .055s ease,box-shadow .055s ease!important;
+}
+.premium-start .start-art-wrap .real-start-button .start-play{
+  font-size:.82em!important;
+  transform:translateY(1px)!important;
+}
+.premium-start .start-art-wrap .real-start-button.pressed{
+  transform:translateY(5px) scale(.965)!important;
+  filter:brightness(.74) saturate(.94)!important;
+  box-shadow:
+    0 1px 0 #004326,
+    0 2px 5px rgba(0,0,0,.22),
+    inset 0 9px 15px rgba(0,0,0,.38)!important;
+}
+.premium-start .start-art-wrap .real-start-button.flash .start-flash{
+  animation:startRealFlash .28s ease-out both!important;
+}
