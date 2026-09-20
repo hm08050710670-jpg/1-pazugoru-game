@@ -716,11 +716,24 @@ async function enemyShot(epoch){
   function unlockedCourse(){const v=Number(localStorage.getItem('pazugoru-unlocked-course')||1);return Number.isFinite(v)?Math.max(1,Math.min(2,v)):1}
   function markCourseClear(n){localStorage.setItem('pazugoru-course-'+n+'-clear','1');localStorage.setItem('pazugoru-unlocked-course',String(Math.max(unlockedCourse(),n+1)));updateStageMap()}
   function updateStageMap(){const u=unlockedCourse();for(let n=1;n<=5;n++){const b=document.querySelector('.n'+n);if(!b)continue;b.disabled=!(n<=2&&n<=u)}}
-  function showStageMap(){const m=document.getElementById('stageMap');if(!m)return;m.hidden=false;updateStageMap();Audio.stopEffects()}
+  function showStageMap(){const m=document.getElementById('stageMap');if(!m)return;m.hidden=false;updateStageMap();Audio.stopEffects();try{void Audio.playWorld();}catch(e){}}
   function hideStageMap(){const m=document.getElementById('stageMap');if(m)m.hidden=true}
+  async function stageEntryFx(n){
+    const layer=document.getElementById('stageEntry');if(!layer)return;
+    const no=document.getElementById('stageEntryNo'),title=document.getElementById('stageEntryTitle');
+    if(no)no.textContent='STAGE '+n;if(title)title.textContent='READY?';
+    layer.hidden=false;layer.setAttribute('aria-hidden','false');
+    await new Promise(r=>setTimeout(r,720));
+    if(title)title.textContent='START!';
+    try{uiClick();}catch(e){}
+    await new Promise(r=>setTimeout(r,430));
+    layer.classList.add('out');await new Promise(r=>setTimeout(r,250));
+    layer.hidden=true;layer.classList.remove('out');layer.setAttribute('aria-hidden','true');
+  }
   async function startCourse(n){
     if(n>unlockedCourse())return;
     const id=COURSE_START[n];
+    const entryFx=stageEntryFx(n);
     // Keep the stage map visible while all first-battle assets are decoded.
     // This prevents the empty battle frame / ? placeholder from flashing.
     try{
@@ -735,6 +748,8 @@ async function enemyShot(epoch){
           if(im.decode)im.decode().then(resolve).catch(()=>{});
         })));
       }
+      await entryFx;
+      try{await Audio.playStage();}catch(e){}
       await loadBattle(id);
       hideStageMap();
     }catch(e){
@@ -909,7 +924,7 @@ async function enemyShot(epoch){
       clearTimeout(pressTimer);
       startButton.classList.add('pressed','flash');
       playStartClick();
-      try{Audio.unlock();Audio.preloadBoss();void Audio.enable('start');}catch(e){}
+      try{Audio.unlock();Audio.preloadBoss();Audio.preloadWorld();void Audio.enable('start');}catch(e){}
     };
     const up=()=>{
       clearTimeout(pressTimer);

@@ -11,6 +11,7 @@
   let bossBuffer=null,bossDecoding=null,bossSource=null;
   let appearBuffer=null,appearDecoding=null,appearSource=null;
   let musicMode='normal';
+  let worldBuffer=null,worldDecoding=null,worldSource=null;
   let offset=0, startedAt=0, away=false, wanted=true, waiting=false, error='', pending=false;
   let bgmVolume=.14, effectsVolume=1, serial=0;
   const channels=new Map(), voices=new Set();
@@ -120,6 +121,25 @@
       if(token===serial){error='BGMを読み込めませんでした。メニューの「音を再読み込み」で再試行できます。';console.warn('BGM load:',e.message);}
     }finally{clearTimeout(timer);if(token===serial){pending=false;render();}}
   }
+  async function getWorldBuffer(){
+    const c=ensure();if(!c)throw new Error('Web Audio unavailable');
+    if(worldBuffer)return worldBuffer;
+    if(worldDecoding)return worldDecoding;
+    worldDecoding=fetch('world-bgm.wav',{cache:'force-cache'}).then(r=>{if(!r.ok)throw new Error('world bgm '+r.status);return r.arrayBuffer()})
+      .then(ab=>c.decodeAudioData(ab)).then(b=>worldBuffer=b).finally(()=>worldDecoding=null);
+    return worldDecoding;
+  }
+  function stopWorld(){if(worldSource){try{worldSource.stop()}catch(e){}try{worldSource.disconnect()}catch(e){}worldSource=null}}
+  async function playWorld(){
+    const c=ensure();if(!c)return;musicMode='world';serial++;stopSource();stopBoss();stopAppear();stopWorld();
+    if(c.state!=='running')await c.resume().catch(()=>{});
+    const b=await getWorldBuffer(),n=c.createBufferSource(),g=c.createGain();g.gain.value=.30;
+    n.buffer=b;n.loop=true;n.connect(g);g.connect(output);n.onended=()=>{if(worldSource===n)worldSource=null};worldSource=n;n.start(0);
+  }
+  async function playStage(){
+    stopWorld();stopBoss();stopAppear();musicMode='normal';offset=0;away=false;wanted=true;await enable('stage');
+  }
+  function preloadWorld(){getWorldBuffer().catch(()=>{});}
   async function getAppearBuffer(){
     const c=ensure();if(!c)throw new Error('Web Audio unavailable');
     if(appearBuffer)return appearBuffer;
@@ -162,7 +182,7 @@
   }
   function preloadBoss(){getBossBuffer().catch(()=>{});getAppearBuffer().catch(()=>{});}
   async function restoreNormal(){
-    stopBoss();stopAppear();musicMode='normal';offset=0;await enable('restore-normal');
+    stopBoss();stopAppear();stopWorld();musicMode='normal';offset=0;await enable('restore-normal');
   }
 
   function unlock(){const c=ensure();if(c&&!document.hidden&&c.state!=='running')c.resume().catch(()=>{});return c;}
@@ -179,7 +199,7 @@
       wanted,waiting,pending,error,position:position(),duration:buffer?.duration||0,requestCount,starts,maxConcurrent,active:source?1:0,voices:voices.size,
       bgmVolume,effectsVolume,rms,channels:channels.size,sounds:{...sounds}};
   }
-  window.PazugoruAudio=Object.freeze({channel,unlock,registerVoice,stopEffects,enable,levels,setVolume,info,playBoss,stopBoss,playBossAppear,restoreNormal,preloadBoss,count:name=>{if(name in sounds)sounds[name]++;}});
+  window.PazugoruAudio=Object.freeze({channel,unlock,registerVoice,stopEffects,enable,levels,setVolume,info,playBoss,stopBoss,playBossAppear,restoreNormal,preloadBoss,playWorld,playStage,preloadWorld,count:name=>{if(name in sounds)sounds[name]++;}});
   for(const type of ['pointerdown','pointerup','touchend','keydown'])document.addEventListener(type,e=>{
     if(!e.isTrusted||document.hidden||(e.type==='keydown'&&e.repeat))return;
     if(e.pointerType==='mouse'&&e.button!==0)return;
