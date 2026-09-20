@@ -897,23 +897,31 @@ async function enemyShot(epoch){
     try{Audio.preloadBoss();}catch(e){}
     if(loader){loader.classList.add('ready');setTimeout(()=>loader.remove(),260)}
   })();
+  const startClickAudio=new window.Audio('ui-click.wav');startClickAudio.preload='auto';startClickAudio.volume=.8;
+  function playStartClick(){try{startClickAudio.currentTime=0;const p=startClickAudio.play();if(p&&p.catch)p.catch(()=>{uiClick();});}catch(e){try{uiClick();}catch(_){}}}
   const opening=document.getElementById('openingScreen'),map=document.getElementById('stageMap');
   if(map)map.hidden=true;
   const startButton=document.getElementById('gameStartButton');
   if(startButton){
-    let pressedAt=0,started=false;
-    const release=()=>{const delay=Math.max(0,150-(performance.now()-pressedAt));setTimeout(()=>startButton.classList.remove('pressed'),delay)};
-    startButton.addEventListener('pointerdown',()=>{
-      if(started)return;pressedAt=performance.now();
-      startButton.classList.add('pressed');startButton.classList.remove('flash');void startButton.offsetWidth;startButton.classList.add('flash');
-      uiClick();
+    let started=false,pressTimer=0;
+    const down=()=>{
+      if(started)return;
+      clearTimeout(pressTimer);
+      startButton.classList.add('pressed','flash');
+      playStartClick();
       try{Audio.unlock();Audio.preloadBoss();void Audio.enable('start');}catch(e){}
-    },{passive:true});
-    startButton.addEventListener('pointerup',release,{passive:true});
-    startButton.addEventListener('pointercancel',release,{passive:true});
+    };
+    const up=()=>{
+      clearTimeout(pressTimer);
+      pressTimer=setTimeout(()=>startButton.classList.remove('pressed','flash'),170);
+    };
+    startButton.addEventListener('pointerdown',down,{passive:true});
+    startButton.addEventListener('pointerup',up,{passive:true});
+    startButton.addEventListener('pointercancel',up,{passive:true});
     startButton.addEventListener('click',()=>{
       if(started)return;started=true;
-      setTimeout(()=>{opening.hidden=true;showStageMap();},155);
+      startButton.classList.add('pressed','flash');
+      setTimeout(()=>{opening.hidden=true;showStageMap();},180);
     });
   }
 
