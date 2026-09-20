@@ -720,17 +720,35 @@ async function enemyShot(epoch){
   function hideStageMap(){const m=document.getElementById('stageMap');if(m)m.hidden=true}
   async function stageEntryFx(n){
     const layer=document.getElementById('stageEntry');if(!layer)return;
-    const no=document.getElementById('stageEntryNo'),title=document.getElementById('stageEntryTitle');
-    if(no)no.textContent='STAGE '+n;if(title)title.textContent='READY?';
-    layer.hidden=false;layer.setAttribute('aria-hidden','false');
-    await new Promise(r=>setTimeout(r,720));
+    const no=document.getElementById('stageEntryNo');
+    const title=document.getElementById('stageEntryTitle');
+    const count=document.getElementById('stageEntryCount');
+    if(no)no.textContent='STAGE '+n;
+    if(title)title.textContent='READY?';
+    if(count)count.textContent='3';
+    layer.hidden=false;layer.classList.remove('out','go');layer.setAttribute('aria-hidden','false');
+
+    const showCount=async value=>{
+      if(count){count.textContent=value;count.classList.remove('pop');void count.offsetWidth;count.classList.add('pop');}
+      try{uiClick();}catch(e){}
+      await new Promise(r=>setTimeout(r,420));
+    };
+
+    await new Promise(r=>setTimeout(r,380));
+    await showCount('3');
+    await showCount('2');
+    await showCount('1');
+
     if(title)title.textContent='START!';
+    if(count)count.textContent='';
+    layer.classList.add('go');
     try{uiClick();}catch(e){}
-    await new Promise(r=>setTimeout(r,430));
-    layer.classList.add('out');await new Promise(r=>setTimeout(r,250));
-    layer.hidden=true;layer.classList.remove('out');layer.setAttribute('aria-hidden','true');
+    await new Promise(r=>setTimeout(r,470));
+    layer.classList.add('out');
+    await new Promise(r=>setTimeout(r,230));
+    layer.hidden=true;layer.classList.remove('out','go');layer.setAttribute('aria-hidden','true');
   }
-  async function startCourse(n){
+    async function startCourse(n){
     if(n>unlockedCourse())return;
     const id=COURSE_START[n];
     const entryFx=stageEntryFx(n);
