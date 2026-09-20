@@ -633,3 +633,25 @@ html,body{margin:0!important;padding:0!important;width:100%!important;max-width:
 .premium-start .start-art-wrap .real-start-button.flash .start-flash{
   animation:startRealFlash .28s ease-out both!important;
 }
+
+/* Approved splash integration: artwork owns the visible START.
+   HTML button is interaction-only, so there can never be a duplicate visible button. */
+.premium-start .start-art-wrap .real-start-button{
+  left:33.5%!important;right:33.5%!important;top:73.45%!important;height:4.65%!important;
+  min-height:0!important;background:transparent!important;border:0!important;
+  box-shadow:none!important;color:transparent!important;text-shadow:none!important;
+  gap:0!important;filter:none!important;
+}
+.premium-start .start-art-wrap .real-start-button .start-play,
+.premium-start .start-art-wrap .real-start-button .start-label{opacity:0!important}
+.premium-start .start-art-wrap .real-start-button::after{
+  content:"";position:absolute;inset:0;border-radius:999px;pointer-events:none;
+  background:transparent;transition:.055s ease;
+}
+.premium-start .start-art-wrap .real-start-button.pressed{
+  transform:translateY(4px) scale(.96)!important;filter:none!important;box-shadow:none!important;
+}
+.premium-start .start-art-wrap .real-start-button.pressed::after{
+  background:rgba(0,0,0,.25)!important;
+  box-shadow:inset 0 7px 12px rgba(0,0,0,.30),0 0 12px rgba(118,255,171,.35)!important;
+}
