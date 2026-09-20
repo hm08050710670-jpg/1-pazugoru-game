@@ -202,7 +202,13 @@ function matchBurst(point,size,combo){const count=Math.min(16,6+Math.max(0,size-
       const top=Math.max(titleRect.bottom,menuRect.bottom)-heroRect.top+10;
       const bottom=hudRect.top-heroRect.top-10;
       const gap=14, safeW=Math.max(60,heroRect.width-32), safeH=Math.max(40,bottom-top);
-      const scale=Math.min(d.visibleHeight/(box[3]-box[1]),Math.max(.04,(safeW-gap*2)/(env[2]-env[0])),Math.max(.04,(safeH-gap*2)/(env[3]-env[1])));
+      const fitScale=Math.min(d.visibleHeight/(box[3]-box[1]),Math.max(.04,(safeW-gap*2)/(env[2]-env[0])),Math.max(.04,(safeH-gap*2)/(env[3]-env[1])));
+      // Monster display standard: all enemies +18%; bosses are 1.30x the enlarged normal size.
+      // Clamp to the available actor area so horns / ears / wings / tails never clip.
+      const isBoss=COURSE_BOSS.has(activeStage?.id);
+      const requestedScale=fitScale*1.18*(isBoss?1.30:1);
+      const hardMax=Math.min(Math.max(.04,(safeW-4)/(env[2]-env[0])),Math.max(.04,(safeH-4)/(env[3]-env[1])));
+      const scale=Math.min(requestedScale,hardMax);
       const y=top+(safeH-(env[3]-env[1])*scale)/2-env[1]*scale;
       ui.anchor.style.setProperty('--actor-w',(d.frameWidth*scale)+'px');
       ui.anchor.style.setProperty('--actor-h',(d.frameHeight*scale)+'px');
@@ -849,6 +855,7 @@ async function enemyShot(epoch){
       const s=await Assets.activate(id,(done,total)=>{if(seq===loadSerial){$('loadText').textContent='素材を準備中 '+done+' / '+total;$('loadProgress').value=done/total;}});
       if(seq!==loadSerial)return;
       activeStage=s;CONFIG=Object.freeze({...s.stats});POSES=Object.freeze(s.poses);
+      ui.hero.classList.toggle('boss-display',COURSE_BOSS.has(s.id));
       ui.app.setAttribute('aria-label','パズゴル '+s.stageLabel+' '+s.name);
       ui.hero.style.setProperty('--stage-image',`url("${s.background}")`);
       $('stageLabel').textContent=s.stageLabel;$('enemyName').textContent=s.name;
