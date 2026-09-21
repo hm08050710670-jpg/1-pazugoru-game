@@ -203,10 +203,11 @@ function matchBurst(point,size,combo){const count=Math.min(16,6+Math.max(0,size-
       const bottom=hudRect.top-heroRect.top-10;
       const gap=14, safeW=Math.max(60,heroRect.width-32), safeH=Math.max(40,bottom-top);
       const fitScale=Math.min(d.visibleHeight/(box[3]-box[1]),Math.max(.04,(safeW-gap*2)/(env[2]-env[0])),Math.max(.04,(safeH-gap*2)/(env[3]-env[1])));
-      // Monster display standard: all enemies +18%; bosses are 1.30x the enlarged normal size.
-      // Clamp to the available actor area so horns / ears / wings / tails never clip.
-      const isBoss=COURSE_BOSS.has(activeStage?.id);
-      const requestedScale=fitScale*1.18*(isBoss?1.30:1);
+      // SIZE POLICY: ordinary monsters stay at the original size.
+      // Only the two approved dragon bosses may be enlarged.
+      const LARGE_BOSS_IDS=new Set(['s1-7-boss','c2-abiko']);
+      const isLargeBoss=LARGE_BOSS_IDS.has(activeStage?.id);
+      const requestedScale=fitScale*(isLargeBoss?1.30:1);
       const hardMax=Math.min(Math.max(.04,(safeW-4)/(env[2]-env[0])),Math.max(.04,(safeH-4)/(env[3]-env[1])));
       const scale=Math.min(requestedScale,hardMax);
       const y=top+(safeH-(env[3]-env[1])*scale)/2-env[1]*scale;
@@ -716,71 +717,111 @@ async function enemyShot(epoch){
     setPhase('ready');if(combo>=3&&state.turn%currentEnemyEvery()!==0)briefly('angry',650);
   }
   
-  const COURSE_START={1:'s1-korafu',2:'c2-sunamogu'};
-  const COURSE_BOSS=new Set(['boss-koshigaya','c2-abiko']);
-  function courseOf(id){return String(id||'').startsWith('c2-')?2:1}
-  function unlockedCourse(){const v=Number(localStorage.getItem('pazugoru-unlocked-course')||1);return Number.isFinite(v)?Math.max(1,Math.min(2,v)):1}
-  function markCourseClear(n){localStorage.setItem('pazugoru-course-'+n+'-clear','1');localStorage.setItem('pazugoru-unlocked-course',String(Math.max(unlockedCourse(),n+1)));updateStageMap()}
-  function updateStageMap(){const u=unlockedCourse();for(let n=1;n<=5;n++){const b=document.querySelector('.n'+n);if(!b)continue;b.disabled=!(n<=2&&n<=u)}}
-  function showStageMap(){const m=document.getElementById('stageMap');if(!m)return;m.hidden=false;updateStageMap();Audio.stopEffects();try{void Audio.playWorld();}catch(e){}}
+  const AREA_ENCOUNTERS={
+    1:['s1-1-1','s1-1-2','s1-1-3'],
+    2:['s1-2-1','s1-2-2','s1-2-3'],
+    3:['s1-3-1','s1-3-2','s1-3-3'],
+    4:['s1-4-1','s1-4-2','s1-4-3'],
+    5:['s1-5-1','s1-5-2','s1-5-3'],
+    6:['s1-6-1','s1-6-2','s1-6-3'],
+    7:['s1-7-1','s1-7-2','s1-7-3','s1-7-boss']
+  };
+  const COURSE_BOSS=new Set(['s1-7-boss']);
+  let currentArea=1,currentEncounterIndex=0;
+  let activeSaveSlot=Number(sessionStorage.getItem('pazugoru-active-save-slot')||0);
+  function courseOf(){return 1}
+  function saveKey(name,slot=activeSaveSlot){return `pazugoru-save-${slot||1}-${name}`}
+  function unlockedArea(slot=activeSaveSlot){
+    const v=Number(localStorage.getItem(saveKey('stage1-unlocked-area',slot))||1);
+    return Number.isFinite(v)?Math.max(1,Math.min(7,v)):1;
+  }
+  function clearedAreas(slot=activeSaveSlot){
+    try{return new Set(JSON.parse(localStorage.getItem(saveKey('stage1-cleared',slot))||'[]'))}catch(e){return new Set()}
+  }
+  function markAreaClear(n){
+    const set=clearedAreas();set.add(n);
+    localStorage.setItem(saveKey('stage1-cleared'),JSON.stringify([...set].sort((a,b)=>a-b)));
+    if(n<7)localStorage.setItem(saveKey('stage1-unlocked-area'),String(Math.max(unlockedArea(),n+1)));
+    updateStageMap();
+  }
+  function saveStatus(slot){
+    const c=clearedAreas(slot),u=unlockedArea(slot);
+    if(c.has(7))return 'STAGE 1 CLEAR';
+    if(c.size===0)return '1-1から';
+    return `1-${u}まで解放`;
+  }
+  function refreshSaveSelect(){
+    const a=$('save1Status'),b=$('save2Status');
+    if(a)a.textContent=saveStatus(1);if(b)b.textContent=saveStatus(2);
+  }
+  function chooseSaveSlot(slot){
+    activeSaveSlot=slot;sessionStorage.setItem('pazugoru-active-save-slot',String(slot));
+    const sel=$('saveSelect');if(sel)sel.hidden=true;
+    const opening=$('openingScreen');if(opening)opening.hidden=true;
+    showWorldStageMap();
+  }
+  function updateStageMap(){
+    const u=unlockedArea(),cleared=clearedAreas();
+    document.querySelectorAll('.area-node[data-area]').forEach(b=>{
+      const n=Number(b.dataset.area),locked=n>u,isCleared=cleared.has(n),isCurrent=!locked&&!isCleared&&n===u;
+      b.disabled=locked;b.setAttribute('aria-disabled',locked?'true':'false');b.tabIndex=locked?-1:0;
+      b.classList.toggle('locked',locked);b.classList.toggle('cleared',isCleared);b.classList.toggle('current',isCurrent);
+      b.style.pointerEvents=locked?'none':'auto';
+    });
+  }
+  function returnFromStageMap(){
+    try{uiClick();}catch(e){}
+    const m=$('stageMap');if(m)m.hidden=true;
+    showWorldStageMap();
+  }
+  const stageMapBack=$('stageMapBack');
+  if(stageMapBack)stageMapBack.addEventListener('click',returnFromStageMap,{passive:true});
+  function showWorldStageMap(){
+    const area=$('stageMap');if(area)area.hidden=true;
+    const world=$('worldStageMap');if(world)world.hidden=false;
+    try{Audio.stopEffects();void Audio.playWorld();}catch(e){}
+  }
+  function hideWorldStageMap(){const world=$('worldStageMap');if(world)world.hidden=true}
+  const worldStage1=$('worldStage1');
+  if(worldStage1)worldStage1.addEventListener('click',()=>{
+    try{uiClick();}catch(e){}
+    hideWorldStageMap();showStageMap();
+  });
+  function showStageMap(){
+    const m=document.getElementById('stageMap');if(!m)return;
+    m.hidden=false;updateStageMap();Audio.stopEffects();try{void Audio.playWorld();}catch(e){}
+  }
   function hideStageMap(){const m=document.getElementById('stageMap');if(m)m.hidden=true}
   async function stageEntryFx(n){
     const layer=document.getElementById('stageEntry');if(!layer)return;
-    const no=document.getElementById('stageEntryNo');
-    const title=document.getElementById('stageEntryTitle');
-    const count=document.getElementById('stageEntryCount');
-    if(no)no.textContent='STAGE '+n;
-    if(title)title.textContent='READY?';
-    if(count)count.textContent='3';
+    const no=document.getElementById('stageEntryNo'),title=document.getElementById('stageEntryTitle'),count=document.getElementById('stageEntryCount');
+    if(no)no.textContent='1-'+n;if(title)title.textContent='READY?';if(count)count.textContent='3';
     layer.hidden=false;layer.classList.remove('out','go');layer.setAttribute('aria-hidden','false');
-
-    const showCount=async value=>{
-      if(count){count.textContent=value;count.classList.remove('pop');void count.offsetWidth;count.classList.add('pop');}
-      try{uiClick();}catch(e){}
-      await new Promise(r=>setTimeout(r,420));
-    };
-
-    await new Promise(r=>setTimeout(r,380));
-    await showCount('3');
-    await showCount('2');
-    await showCount('1');
-
-    if(title)title.textContent='START!';
-    if(count)count.textContent='';
-    layer.classList.add('go');
-    try{uiClick();}catch(e){}
-    await new Promise(r=>setTimeout(r,470));
-    layer.classList.add('out');
-    await new Promise(r=>setTimeout(r,230));
+    const showCount=async value=>{if(count){count.textContent=value;count.classList.remove('pop');void count.offsetWidth;count.classList.add('pop');}try{uiClick();}catch(e){}await new Promise(r=>setTimeout(r,420));};
+    await new Promise(r=>setTimeout(r,300));await showCount('3');await showCount('2');await showCount('1');
+    if(title)title.textContent='START!';if(count)count.textContent='';layer.classList.add('go');try{uiClick();}catch(e){}
+    await new Promise(r=>setTimeout(r,430));layer.classList.add('out');await new Promise(r=>setTimeout(r,220));
     layer.hidden=true;layer.classList.remove('out','go');layer.setAttribute('aria-hidden','true');
   }
-    async function startCourse(n){
-    if(n>unlockedCourse())return;
-    const id=COURSE_START[n];
-    const entryFx=stageEntryFx(n);
-    // Keep the stage map visible while all first-battle assets are decoded.
-    // This prevents the empty battle frame / ? placeholder from flashing.
-    try{
-      await Assets.prepare(id);
-      const catalog=await Assets.getCatalog();
-      const meta=catalog.stages.find(x=>x.id===id);
-      if(meta){
-        const stage=await Assets.prepare(id);
-        const srcs=[stage.background,...Object.values(stage.poses||{}).map(p=>p.src)].filter(Boolean);
-        await Promise.all(srcs.map(src=>new Promise(resolve=>{
-          const im=new Image();im.onload=im.onerror=resolve;im.src=src;
-          if(im.decode)im.decode().then(resolve).catch(()=>{});
-        })));
-      }
-      await entryFx;
-      try{await Audio.playStage();}catch(e){}
-      await loadBattle(id);
-      hideStageMap();
-    }catch(e){
-      // If preparation fails, enter the existing error path without showing a blank battle first.
-      await loadBattle(id);
-      if(state.phase!=='load-error')hideStageMap();
+  function battleCarry(){
+    return {player:state.player,types:state.grid.map(t=>t?.color).filter(v=>v!==undefined),turn:state.turn,maxCombo:state.maxCombo};
+  }
+  async function loadEncounter(id,carry=null){
+    await loadBattle(id);
+    if(carry){
+      resetGame(carry.types.length===30?carry.types:undefined);
+      state.player=Math.max(1,Math.min(CONFIG.playerMax,carry.player));
+      state.turn=carry.turn;state.maxCombo=carry.maxCombo;updateHP();
     }
+  }
+  async function startArea(n){
+    if(n>unlockedArea())return;
+    currentArea=n;currentEncounterIndex=0;
+    const id=AREA_ENCOUNTERS[n][0],entryFx=stageEntryFx(n);
+    try{
+      await Assets.prepare(id);await entryFx;try{await Audio.playStage();}catch(e){}
+      await loadEncounter(id);hideStageMap();
+    }catch(e){await loadEncounter(id);if(state.phase!=='load-error')hideStageMap();}
   }
   async function bossDefeatClearFx(){
     const d=ui.dragon,a=ui.anchor,h=ui.hero;if(!d||!a||!h)return;
@@ -793,26 +834,49 @@ async function enemyShot(epoch){
     await wait(motion(1450),state.epoch);clear.remove();sparkle.remove();
   }
   async function finish(win){
-    if(COURSE_BOSS.has(activeStage?.id)){try{void Audio.restoreNormal();}catch(e){stopBossMusic();}}
+    const isBoss=COURSE_BOSS.has(activeStage?.id);
+    if(isBoss){try{void Audio.restoreNormal();}catch(e){stopBossMusic();}}
     setPhase('ended');clearTimeout(faceTimer);clearTimeout(expressionTimer);
-    const currentCourse=courseOf(activeStage?.id),nextId=Assets.nextId();
-    if(win&&!COURSE_BOSS.has(activeStage?.id)&&nextId&&courseOf(nextId)===currentCourse){
-      ui.result.hidden=true;modalMode(false);
-      try{await Assets.prefetchNext();if(COURSE_BOSS.has(nextId))await bossIntro();await loadBattle(nextId);}
-      catch(e){ui.result.hidden=false;modalMode(true);setStatus('次のステージを読み込めませんでした');}
-      return;
+    if(win){
+      const list=AREA_ENCOUNTERS[currentArea],hasNext=currentEncounterIndex<list.length-1;
+      if(hasNext){
+        const carry=battleCarry();currentEncounterIndex++;
+        const nextId=list[currentEncounterIndex];
+        ui.result.hidden=true;modalMode(false);
+        try{
+          if(COURSE_BOSS.has(nextId))await bossIntro();
+          await loadEncounter(nextId,carry);
+        }catch(e){ui.result.hidden=false;modalMode(true);setStatus('次のモンスターを読み込めませんでした');}
+        return;
+      }
+      if(isBoss)await bossDefeatClearFx();
+      markAreaClear(currentArea);
     }
-    if(win&&COURSE_BOSS.has(activeStage?.id)){await bossDefeatClearFx();markCourseClear(currentCourse);}
     if(!win)setPose('wink');
     ui.result.classList.toggle('win',win);ui.result.hidden=false;modalMode(true);
     $('resultTitle').textContent=win?'CLEAR!':'GAME OVER';
-    const stageLabel=$('resultStageLabel');if(stageLabel)stageLabel.textContent='STAGE '+currentCourse;
-    $('resultMessage').textContent=win?(activeStage.name+'を撃破！'):(activeStage.name+'に負けた！');
-    const nsb=$('nextStageButton');if(nsb)nsb.hidden=true;
+    const stageLabel=$('resultStageLabel');if(stageLabel)stageLabel.textContent='1-'+currentArea+' CLEAR';
+    $('resultMessage').textContent=win?('1-'+currentArea+' をクリア！'):(activeStage.name+'に負けた！');
     $('resultTurns').textContent=`${state.turn} ターン`;$('resultCombo').textContent=`最高 ${state.maxCombo} COMBO`;
+    const actions=$('retryButton').parentElement;
+    let nextAreaBtn=$('nextAreaButton');
+    if(!nextAreaBtn){
+      nextAreaBtn=document.createElement('button');nextAreaBtn.id='nextAreaButton';nextAreaBtn.className='next-area';
+      actions.appendChild(nextAreaBtn);
+      nextAreaBtn.addEventListener('click',()=>{
+        if(currentArea>=7)return;
+        const next=currentArea+1;
+        ui.result.hidden=true;modalMode(false);
+        setTimeout(()=>startArea(next),80);
+      });
+    }
+    // Show only after a clear and only when another area exists.
+    nextAreaBtn.hidden=!(win&&currentArea<7);
+    if(!nextAreaBtn.hidden)nextAreaBtn.textContent='次のステージへ  1-'+(currentArea+1);
+
     let mapBtn=$('mapReturnButton');
-    if(!mapBtn){mapBtn=document.createElement('button');mapBtn.id='mapReturnButton';mapBtn.className='map-return';mapBtn.textContent='ステージ選択へ';$('retryButton').parentElement.appendChild(mapBtn);mapBtn.addEventListener('click',()=>{ui.result.hidden=true;modalMode(false);try{void Audio.restoreNormal();}catch(e){stopBossMusic();}showStageMap()});}
-    mapBtn.hidden=false;$('retryButton').textContent=win?'もう一度あそぶ':'もう一度挑戦';$('retryButton').focus({preventScroll:true});
+    if(!mapBtn){mapBtn=document.createElement('button');mapBtn.id='mapReturnButton';mapBtn.className='map-return';mapBtn.textContent='マップへ戻る';actions.appendChild(mapBtn);mapBtn.addEventListener('click',()=>{ui.result.hidden=true;modalMode(false);try{void Audio.playWorld();}catch(e){}showStageMap()});}
+    mapBtn.hidden=false;$('retryButton').textContent=win?'このエリアをもう一度':'もう一度挑戦';$('retryButton').focus({preventScroll:true});
   }
   async function bossIntro(){
     const layer=$('bossIntro');if(!layer)return;
@@ -831,7 +895,7 @@ async function enemyShot(epoch){
     if(!ok)return;
     ui.help.hidden=true;modalMode(false);try{void Audio.restoreNormal();}catch(e){stopBossMusic();}setPhase('loading');showStageMap();
   });
-  $('resetButton').addEventListener('click',()=>resetGame());$('retryButton').addEventListener('click',()=>resetGame());
+  $('resetButton').addEventListener('click',()=>resetGame());$('retryButton').addEventListener('click',()=>{ui.result.hidden=true;modalMode(false);showStageMap();setTimeout(()=>startArea(currentArea),80)});
   
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!ui.help.hidden){ui.help.hidden=true;modalMode(false);idleStamp=performance.now();ui.menu.focus({preventScroll:true});}});
   window.addEventListener('resize',scheduleLayout);
@@ -855,7 +919,7 @@ async function enemyShot(epoch){
       const s=await Assets.activate(id,(done,total)=>{if(seq===loadSerial){$('loadText').textContent='素材を準備中 '+done+' / '+total;$('loadProgress').value=done/total;}});
       if(seq!==loadSerial)return;
       activeStage=s;CONFIG=Object.freeze({...s.stats});POSES=Object.freeze(s.poses);
-      ui.hero.classList.toggle('boss-display',COURSE_BOSS.has(s.id));
+      ui.hero.classList.toggle('boss-display',s.id==='s1-7-boss'||s.id==='c2-abiko');
       ui.app.setAttribute('aria-label','パズゴル '+s.stageLabel+' '+s.name);
       ui.hero.style.setProperty('--stage-image',`url("${s.background}")`);
       $('stageLabel').textContent=s.stageLabel;$('enemyName').textContent=s.name;
@@ -915,12 +979,12 @@ async function enemyShot(epoch){
     if(c.state==='running')fire();else c.resume().then(fire).catch(()=>{});
   }
   function pressFx(b){b.classList.add('pressed');uiClick();setTimeout(()=>b.classList.remove('pressed'),145)}
-  document.querySelectorAll('.stage-node[data-course]').forEach(b=>b.addEventListener('click',()=>{if(!b.disabled){pressFx(b);setTimeout(()=>startCourse(Number(b.dataset.course)),70)}}));
+  document.querySelectorAll('.area-node[data-area]').forEach(b=>b.addEventListener('click',e=>{const n=Number(b.dataset.area);if(b.disabled||n>unlockedArea()){e.preventDefault();e.stopPropagation();return;}pressFx(b);setTimeout(()=>startArea(n),70);}));
   updateStageMap();
   const worldMapPreload=new Image();worldMapPreload.src='world-bg.webp';
   (async()=>{
     const loader=document.getElementById('bootLoader'),pct=document.getElementById('bootPercent');
-    const imageUrls=['start-screen.webp','world-bg.webp','battle-riverside.webp','c1-korafu.png'];
+    const imageUrls=['start-screen.webp','stage-select-map.webp','stage1-map.webp','world-bg.webp','battle-riverside.webp','c1-korafu.png'];
     const audioUrls=['bgm.mp3','boss-appear.wav','boss-bgm.wav'];
     const total=imageUrls.length+audioUrls.length;let done=0,finished=false;
     const progress=()=>{done++;if(pct)pct.textContent=Math.min(100,Math.round(done/total*100))+'%'};
@@ -961,10 +1025,20 @@ async function enemyShot(epoch){
     startButton.addEventListener('click',()=>{
       if(started)return;started=true;
       startButton.classList.add('pressed','flash');
-      setTimeout(()=>{opening.hidden=true;showStageMap();},180);
+      setTimeout(()=>{opening.hidden=true;refreshSaveSelect();const sel=$('saveSelect');if(sel)sel.hidden=false;},180);
     });
   }
 
+
+  document.querySelectorAll('[data-save-slot]').forEach(b=>b.addEventListener('click',()=>{
+    try{uiClick();}catch(e){}chooseSaveSlot(Number(b.dataset.saveSlot));
+  }));
+  const saveSelectBack=$('saveSelectBack');
+  if(saveSelectBack)saveSelectBack.addEventListener('click',()=>{
+    try{uiClick();}catch(e){}
+    const sel=$('saveSelect');if(sel)sel.hidden=true;
+    const opening=$('openingScreen');if(opening)opening.hidden=false;
+  });
   // Test-only helpers are absent from a normal URL. No server/score writes exist.
   if(new URLSearchParams(location.search).get('test')==='1'){
     window.__pazugoruTest=Object.freeze({
@@ -989,5 +1063,15 @@ async function enemyShot(epoch){
       cancel:()=>cancelDrag('test cancel'),reset:()=>resetGame()
     });
   }
+
+  // iOS Safari: prevent accidental double-tap / pinch zoom inside the game.
+  let lastGameTouchEnd=0;
+  document.addEventListener('touchend',e=>{
+    if(!e.target.closest('#viewport'))return;
+    const now=Date.now();
+    if(now-lastGameTouchEnd<320)e.preventDefault();
+    lastGameTouchEnd=now;
+  },{passive:false});
+  document.addEventListener('gesturestart',e=>{if(e.target.closest('#viewport'))e.preventDefault();},{passive:false});
 })();
 
